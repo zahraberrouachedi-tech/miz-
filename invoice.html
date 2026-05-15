@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scan & Go — Facture</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Cairo',Arial,sans-serif;background:#f5f5f5;padding:16px;min-height:100vh;}
+.card{background:#fff;max-width:420px;margin:0 auto;border-radius:14px;padding:24px;box-shadow:0 4px 20px rgba(0,0,0,.12);}
+.hdr{text-align:center;border-bottom:2px dashed #ddd;padding-bottom:14px;margin-bottom:14px;}
+.hdr h1{font-size:22px;font-weight:900;}
+.hdr p{font-size:13px;color:#777;margin-top:4px;}
+.meta{font-size:12px;color:#555;margin-bottom:14px;}
+.meta-row{display:flex;justify-content:space-between;margin-bottom:4px;flex-wrap:wrap;gap:4px;}
+table{width:100%;border-collapse:collapse;margin-bottom:14px;}
+th{background:#f5f5f5;padding:8px 6px;font-size:12px;border-bottom:2px solid #ddd;}
+td{padding:8px 6px;border-bottom:1px solid #eee;font-size:13px;}
+.tot-row td{padding:6px 6px;font-size:13px;}
+.grand-row td{padding:10px 6px;font-size:17px;font-weight:900;border-top:2px solid #111;}
+.change-row{background:#e8f5e9;}
+.change-row td{font-weight:900;color:#1b5e20;font-size:15px;padding:8px 6px;}
+.disc-row td{color:#2e7d32;}
+.footer{text-align:center;margin-top:16px;padding-top:12px;border-top:1px dashed #ddd;font-size:13px;color:#888;}
+.print-btn{display:block;margin:16px auto 0;background:#111;color:#fff;border:none;padding:12px 32px;border-radius:8px;font-family:'Cairo',sans-serif;font-size:14px;font-weight:700;cursor:pointer;width:100%;}
+.print-btn:hover{background:#333;}
+.err{text-align:center;padding:40px 20px;color:#e74c3c;font-size:15px;}
+@media print{.print-btn{display:none;}}
+</style>
+</head>
+<body>
+<div class="card" id="receipt">
+  <div class="err" id="loading">⏳ جارٍ تحميل الفاتورة...</div>
+</div>
+<script>
+(function(){
+  var params = new URLSearchParams(window.location.search);
+  var enc = params.get('d');
+  if(!enc){
+    document.getElementById('loading').innerHTML = '❌ لم يتم العثور على بيانات الفاتورة.';
+    return;
+  }
+  var d;
+  try{
+    d = JSON.parse(decodeURIComponent(escape(atob(enc))));
+  }catch(e){
+    document.getElementById('loading').innerHTML = '❌ بيانات غير صالحة.';
+    return;
+  }
+
+  var lang = d.lg || 'ar';
+  var isRtl = lang === 'ar';
+  var dir = isRtl ? 'rtl' : 'ltr';
+  var align = isRtl ? 'right' : 'left';
+  var alignOp = isRtl ? 'left' : 'right';
+
+  var labels = {
+    ar:{title:'وصل بيع',ref:'رقم الوصل',pay:'طريقة الدفع',
+        prod:'المنتج',qty:'الكمية',total:'الإجمالي',
+        sub:'المجموع الفرعي',disc:'الخصم',grand:'المبلغ الإجمالي',
+        paid:'المبلغ المُسلَّم',change:'الباقي للزبون',
+        thanks:'🙏 شكراً لزيارتكم — Scan & Go'},
+    fr:{title:'Bon de caisse',ref:'Réf',pay:'Paiement',
+        prod:'Article',qty:'Qté',total:'Total',
+        sub:'Sous-total',disc:'Remise',grand:'Total TTC',
+        paid:'Reçu',change:'Monnaie rendue',
+        thanks:'🙏 Merci pour votre visite — Scan & Go'},
+    en:{title:'Receipt',ref:'Ref',pay:'Payment',
+        prod:'Product',qty:'Qty',total:'Total',
+        sub:'Subtotal',disc:'Discount',grand:'Grand Total',
+        paid:'Received',change:'Change',
+        thanks:'🙏 Thank you for visiting us — Scan & Go'}
+  };
+  var L = labels[lang] || labels.ar;
+
+  // Item rows
+  var rows = (d.it || []).map(function(i){
+    return '<tr>'+
+      '<td style="text-align:'+align+'">'+i.nm+'</td>'+
+      '<td style="text-align:center">'+i.q+'</td>'+
+      '<td style="text-align:'+alignOp+';font-weight:700">'+i.tot+' DZD</td>'+
+    '</tr>';
+  }).join('');
+
+  // Discount row
+  var discRow = d.dc > 0
+    ? '<tr class="disc-row"><td colspan="2" style="text-align:'+align+'">'+L.disc+'</td>'+
+      '<td style="text-align:'+alignOp+'">-'+d.dc+' DZD</td></tr>'
+    : '';
+
+  // Cash change rows
+  var changeRow = d.ch > 0
+    ? '<tr class="tot-row"><td colspan="2" style="text-align:'+align+';color:#555">'+L.paid+'</td>'+
+      '<td style="text-align:'+alignOp+'">'+d.pd+' DZD</td></tr>'+
+      '<tr class="change-row"><td colspan="2" style="text-align:'+align+'">'+L.change+'</td>'+
+      '<td style="text-align:'+alignOp+'">'+d.ch+' DZD</td></tr>'
+    : '';
+
+  var html =
+    '<div dir="'+dir+'" class="hdr">'+
+      '<h1>Scan &amp; Go 🛒</h1>'+
+      '<p>'+L.title+'</p>'+
+    '</div>'+
+    '<div dir="'+dir+'" class="meta">'+
+      '<div class="meta-row"><span>📅 '+d.d+'</span><span>🕐 '+d.t+'</span></div>'+
+      '<div class="meta-row">'+
+        '<span>'+L.ref+': <b>'+d.n+'</b></span>'+
+        '<span>'+L.pay+': <b>'+d.m+'</b></span>'+
+      '</div>'+
+    '</div>'+
+    '<table dir="'+dir+'">'+
+      '<thead><tr>'+
+        '<th style="text-align:'+align+'">'+L.prod+'</th>'+
+        '<th style="text-align:center">'+L.qty+'</th>'+
+        '<th style="text-align:'+alignOp+'">'+L.total+'</th>'+
+      '</tr></thead>'+
+      '<tbody>'+rows+'</tbody>'+
+    '</table>'+
+    '<table dir="'+dir+'">'+
+      '<tr class="tot-row">'+
+        '<td colspan="2" style="text-align:'+align+';color:#777">'+L.sub+'</td>'+
+        '<td style="text-align:'+alignOp+'">'+d.s+' DZD</td>'+
+      '</tr>'+
+      discRow+
+      '<tr class="grand-row">'+
+        '<td colspan="2" style="text-align:'+align+'">'+L.grand+'</td>'+
+        '<td style="text-align:'+alignOp+';color:#b8860b">'+d.g+' DZD</td>'+
+      '</tr>'+
+      changeRow+
+    '</table>'+
+    '<div dir="'+dir+'" class="footer">'+L.thanks+'</div>'+
+    '<button class="print-btn" onclick="window.print()">🖨️ '+(isRtl?'طباعة الفاتورة':'Print Receipt')+'</button>';
+
+  document.getElementById('receipt').innerHTML = html;
+  document.title = 'Scan & Go — ' + d.n;
+  document.documentElement.setAttribute('dir', dir);
+  document.documentElement.setAttribute('lang', lang);
+})();
+</script>
+</body>
+</html>
